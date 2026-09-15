@@ -5,10 +5,14 @@ import { removeBadges } from './scan';
 
 const DEBOUNCE_MS = 300;
 
+const FRAME = window === window.top ? 'top frame' : 'iframe';
+console.log(`[UWFlow Overlay] debug: content script running in ${FRAME} ${location.href}`);
+
 let settings: Settings = DEFAULT_SETTINGS;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let running = false;
 let rerun = false;
+let observedRoot: Element | null = null;
 
 const observer = new MutationObserver(schedule);
 
@@ -22,6 +26,13 @@ function schedule(): void {
 }
 
 async function run(): Promise<void> {
+  console.log(
+    `[UWFlow Overlay] debug: run in ${FRAME} ${JSON.stringify({
+      hasRuntime: Boolean(chrome.runtime?.id),
+      running,
+      sameRoot: document.documentElement === observedRoot,
+    })}`,
+  );
   // After the extension is reloaded or updated, old content scripts lose access to it.
   if (!chrome.runtime?.id) {
     observer.disconnect();
@@ -53,7 +64,9 @@ onSettingsChange((next) => {
 });
 
 void loadSettings().then((loaded) => {
+  console.log(`[UWFlow Overlay] debug: settings loaded in ${FRAME} ${JSON.stringify(loaded)}`);
   settings = loaded;
+  observedRoot = document.documentElement;
   observer.observe(document.documentElement, { childList: true, subtree: true });
   schedule();
 });

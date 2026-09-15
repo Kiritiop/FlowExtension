@@ -72,6 +72,13 @@ describe('applyOverlay', () => {
     expect(count('prof')).toBe(1);
   });
 
+  it('badges an instructor once when Quest wraps the name in a div with a similar id', async () => {
+    document.body.innerHTML =
+      '<div id="win0divDERIVED_CLS_DTL_SSR_INSTR_LONG$0"><span id="DERIVED_CLS_DTL_SSR_INSTR_LONG$0">Brad Lushman</span></div>';
+    await applyOverlay(document, getSettings, okLookup());
+    expect(count('prof')).toBe(1);
+  });
+
   it('respects the toggles', async () => {
     settings.showProfRatings = false;
     const lookup = okLookup();

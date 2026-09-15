@@ -39,7 +39,7 @@ Out of scope:
 - Scans visible text for course codes and instructor names.
 - Sends the collected codes and names to the background worker in one message per scan.
 - Renders badges inside a Shadow DOM so Quest CSS and badge CSS cannot affect each other.
-- Uses a MutationObserver, debounced at about 300ms, to rescan only newly added content, since Quest updates pages without full reloads.
+- Uses a MutationObserver, debounced at about 300ms, to rescan the page, since Quest updates pages without full reloads. Anything already badged is skipped, so rescans are cheap, and only one scan runs at a time.
 - Listens for `chrome.storage` changes and shows or hides badge types immediately when a toggle changes.
 - Marks processed elements so they are not badged twice. Skips inputs, textareas, scripts, styles, and its own badges.
 - Stops quietly if the extension context is invalidated (for example after an extension update).
@@ -47,8 +47,8 @@ Out of scope:
 ### Background worker (`src/background/`)
 
 - The only component that talks to UWFlow (`https://uwflow.com/graphql`). Running requests here avoids content script cross-origin limits.
-- Batches all course codes from one scan into a single GraphQL query using `code: {_in: [...]}`, and all prof codes into a single query the same way.
-- Caches results in `chrome.storage.local` for 24 hours, keyed per course code and per prof code. Successful "not found" results are cached too. Failures are not cached.
+- Batches all course codes from one scan into a single GraphQL query using `code: {_in: [...]}`, and all instructor names into a single query using `_or` of case-insensitive `name: {_ilike: ...}` matches, with LIKE wildcards escaped.
+- Caches results in `chrome.storage.local` for 24 hours, keyed per course code and per normalized instructor name. Successful "not found" results are cached too. Failures are not cached.
 - Requests time out after 10 seconds.
 
 ### Popup (`src/popup/`)
@@ -70,6 +70,8 @@ Out of scope:
 - `course(where: {code: {_eq: "cs246"}})` returns `rating { liked easy useful filled_count comment_count }`. Values are fractions between 0 and 1.
 - `prof(where: ...)` returns `name`, `code` (for example `brad_lushman`), and `rating { clear engaging filled_count comment_count }`.
 - Section to prof links (`course_section.meetings.prof`) are mostly empty for the current and next terms, so professors cannot be matched through Quest class numbers. Matching is by name.
+- Prof codes are not derived consistently from names: `françois_paré` keeps accents, `adil_al-mayah` and `adil_al_mayah` both exist, `andrei_l._badescu` keeps a period. Codes cannot be generated from a name, so the lookup query matches on `name`.
+- Some profs have duplicate records under the same name.
 
 ### Course codes
 
@@ -81,8 +83,9 @@ Out of scope:
 ### Professors
 
 - Instructor names are read from the elements where Quest lists instructors. The exact selectors are determined from saved Quest HTML and kept in one module so layout changes are fixed in one place.
-- Normalization to UWFlow prof code: handle "Last, First" and "Last,First" order, strip accents, lowercase, collapse whitespace, join with underscores. "Brad Lushman" and "Lushman, Brad" both become `brad_lushman`.
-- A cell listing multiple instructors is split and each name is matched separately.
+- Splitting: line breaks and semicolons separate instructors. Within a line, exactly two comma parts where the first has no space is read as "Last, First" and reordered ("Lushman, Brad" becomes "Brad Lushman"). Otherwise commas separate instructors.
+- Matching: by full name, case-insensitive, whitespace collapsed. Accents must match exactly.
+- When UWFlow has duplicate records with the same name, the one with more ratings is used.
 - Placeholders such as "Staff", "TBA", and "To be Announced" are ignored.
 - No match means no badge. The extension never guesses a close name.
 
@@ -103,7 +106,7 @@ Out of scope:
 
 ## Testing
 
-- Unit tests: course code detection and normalization, prof name normalization, cache expiry, GraphQL response mapping using recorded real UWFlow responses.
+- Unit tests: course code detection and normalization, instructor name splitting and normalization, cache expiry, GraphQL response mapping using recorded real UWFlow responses.
 - Page tests: run the content script scan against saved Quest pages (jsdom) and assert badge placement. Saved pages are stripped of the student's name, student number, and other personal details before being added as fixtures.
 - Manual check in Chrome: class search, shopping cart, My Class Schedule, course catalogue, and both toggles on and off.
 

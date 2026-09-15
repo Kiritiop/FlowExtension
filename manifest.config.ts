@@ -8,13 +8,13 @@ export default defineManifest({
   permissions: ['storage'],
   host_permissions: ['https://uwflow.com/*'],
   background: {
-    service_worker: 'src/background/index.ts',
+    service_worker: 'src/background/background.ts',
     type: 'module',
   },
   content_scripts: [
     {
       matches: ['https://quest.pecs.uwaterloo.ca/*'],
-      js: ['src/content/index.ts'],
+      js: ['src/content/content.ts'],
       all_frames: true,
       run_at: 'document_idle',
     },
